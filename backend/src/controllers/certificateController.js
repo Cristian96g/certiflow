@@ -1,17 +1,32 @@
+import fs from "fs";
 import { Certificate } from "../models/Certificate.js";
 import { CertificateType } from "../models/CertificateType.js";
 import { Setting } from "../models/Setting.js";
 import { Site } from "../models/Site.js";
 import {
   buildCertificatePdfBuffer,
-  buildCertificateWorkbook,
   buildExcelFileName,
   buildPdfFileName,
+  ensureCertificateArtifacts,
+  getStoredArtifactAbsolutePath,
+  persistCertificateArtifacts,
 } from "../services/exportService.js";
 import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const calculateApi = (density) => Number((141.5 / density - 131.5).toFixed(2));
+
+const streamFileResponse = (res, absolutePath, contentType, fileName) =>
+  new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(absolutePath);
+
+    stream.on("error", reject);
+    stream.on("end", resolve);
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    stream.pipe(res);
+  });
 
 const previewPresets = {
   CBR: {
@@ -181,6 +196,18 @@ export const createCertificate = asyncHandler(async (req, res) => {
     createdBy: req.user._id,
   });
 
+  let artifactWarning = "";
+
+  const artifactCertificate = await Certificate.findById(certificate._id)
+    .populate("certificateType", "name code")
+    .populate("site", "name code");
+
+  try {
+    await persistCertificateArtifacts(artifactCertificate, defaults);
+  } catch (error) {
+    artifactWarning = error.message || "No se pudieron generar los archivos exportables automaticamente.";
+  }
+
   const populated = await Certificate.findById(certificate._id)
     .populate("certificateType", "name code")
     .populate("site", "name code")
@@ -188,10 +215,65 @@ export const createCertificate = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     certificate: populated,
-    downloads: {
-      pdfReady: false,
-      excelReady: false,
-    },
+    downloads: populated.exportStatus,
+    warning: artifactWarning || undefined,
+  });
+});
+
+export const updateCertificate = asyncHandler(async (req, res) => {
+  const [defaults, certificate] = await Promise.all([
+    Setting.findOne(),
+    Certificate.findById(req.params.id)
+      .populate("certificateType", "name code")
+      .populate("site", "name code"),
+  ]);
+
+  if (!certificate) {
+    throw new AppError("Certificado no encontrado.", 404);
+  }
+
+  const payload = buildCertificatePayload(req.body, defaults || {});
+  const requiredFields = [
+    "certificateNumber",
+    "certificateType",
+    "site",
+    "date",
+    "time",
+    "samplePoint",
+    "destination",
+  ];
+
+  for (const field of requiredFields) {
+    if (!payload[field]) {
+      throw new AppError("Faltan campos obligatorios del certificado.", 400);
+    }
+  }
+
+  Object.assign(certificate, payload);
+  certificate.exportStatus = {
+    excelReady: false,
+    pdfReady: false,
+  };
+  certificate.generatedAt = null;
+  certificate.excelPath = "";
+  certificate.pdfPath = "";
+
+  await certificate.save();
+
+  const refreshedForArtifacts = await Certificate.findById(certificate._id)
+    .populate("certificateType", "name code")
+    .populate("site", "name code");
+
+  await persistCertificateArtifacts(refreshedForArtifacts, defaults || {});
+
+  const populated = await Certificate.findById(certificate._id)
+    .populate("certificateType", "name code")
+    .populate("site", "name code")
+    .populate("createdBy", "name email");
+
+  res.json({
+    certificate: populated,
+    downloads: populated.exportStatus,
   });
 });
 
@@ -313,21 +395,15 @@ export const exportCertificateExcel = asyncHandler(async (req, res) => {
     getCertificateDocument(req.params.id),
     Setting.findOne(),
   ]);
-
-  const workbook = await buildCertificateWorkbook(certificate, settings);
+  await ensureCertificateArtifacts(certificate, settings);
   const fileName = buildExcelFileName(certificate);
-
-  certificate.exportStatus.excelReady = true;
-  await certificate.save();
-
-  res.setHeader(
-    "Content-Type",
+  const absolutePath = getStoredArtifactAbsolutePath(certificate.excelPath);
+  await streamFileResponse(
+    res,
+    absolutePath,
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    fileName,
   );
-  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-
-  await workbook.xlsx.write(res);
-  res.end();
 });
 
 export const exportCertificatePdf = asyncHandler(async (req, res) => {
@@ -335,15 +411,10 @@ export const exportCertificatePdf = asyncHandler(async (req, res) => {
     getCertificateDocument(req.params.id),
     Setting.findOne(),
   ]);
-  const pdfBuffer = await buildCertificatePdfBuffer(certificate, settings);
+  await ensureCertificateArtifacts(certificate, settings);
   const fileName = buildPdfFileName(certificate);
-
-  certificate.exportStatus.pdfReady = true;
-  await certificate.save();
-
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-  res.send(pdfBuffer);
+  const absolutePath = getStoredArtifactAbsolutePath(certificate.pdfPath);
+  await streamFileResponse(res, absolutePath, "application/pdf", fileName);
 });
 
 export const previewCertificatePdfByType = asyncHandler(async (req, res) => {

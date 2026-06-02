@@ -107,6 +107,20 @@ const certificateSchema = new mongoose.Schema(
         default: false,
       },
     },
+    excelPath: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    pdfPath: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    generatedAt: {
+      type: Date,
+      default: null,
+    },
     sampleCount: {
       type: Number,
       default: 1,

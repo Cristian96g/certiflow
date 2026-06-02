@@ -38,6 +38,8 @@ export const env = {
   mongoUri: process.env.MONGODB_URI,
   jwtSecret: process.env.JWT_SECRET || "changeme",
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:5173",
+  generatedFilesRoot:
+    process.env.GENERATED_FILES_ROOT || path.resolve(projectRoot, "storage"),
   certificateTemplatePath:
     process.env.CERTIFICATE_TEMPLATE_PATH ||
     path.resolve(projectRoot, "templates", "CERTIFICADO VERIFICAR.xlsx"),

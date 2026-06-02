@@ -45,6 +45,14 @@ const formatValue = (value, fallback = "-") => {
   return value;
 };
 
+const normalizeRelativePath = (value) => String(value || "").split(path.sep).join("/");
+
+const getRelativeStoragePath = (absolutePath) =>
+  normalizeRelativePath(path.relative(env.generatedFilesRoot, absolutePath));
+
+const resolveStoredFilePath = (relativePath) =>
+  path.resolve(env.generatedFilesRoot, String(relativePath || ""));
+
 const templateSheetMap = {
   CBR: "Certi CBR",
   CN: "Certi CN",
@@ -62,10 +70,7 @@ const templateMappings = {
     printArea: "A1:G36",
     printableLastRow: 36,
     printableLastColumn: 7,
-    pdfColumnWidthOverrides: {
-      4: 10.5,
-      5: 10.25,
-    },
+    pdfColumnWidthOverrides: { 4: 10.5, 5: 10.25 },
     title: "A6",
     laboratoryName: "D8",
     dateTime: "B12",
@@ -85,12 +90,7 @@ const templateMappings = {
     printArea: "A1:J35",
     printableLastRow: 35,
     printableLastColumn: 10,
-    pdfColumnWidthOverrides: {
-      4: 6.4,
-      5: 6.4,
-      6: 6.4,
-      9: 6.4,
-    },
+    pdfColumnWidthOverrides: { 4: 6.4, 5: 6.4, 6: 6.4, 9: 6.4 },
     title: "A6",
     laboratoryName: "F8",
     dateTime: "B12",
@@ -116,10 +116,7 @@ const templateMappings = {
     printArea: "A1:J36",
     printableLastRow: 36,
     printableLastColumn: 10,
-    pdfColumnWidthOverrides: {
-      4: 6.6,
-      9: 6.6,
-    },
+    pdfColumnWidthOverrides: { 4: 6.6, 9: 6.6 },
     title: "A6",
     laboratoryName: "F8",
     dateTime: "B12",
@@ -146,10 +143,7 @@ const templateMappings = {
     printArea: "A1:J36",
     printableLastRow: 36,
     printableLastColumn: 10,
-    pdfColumnWidthOverrides: {
-      4: 6.6,
-      9: 6.6,
-    },
+    pdfColumnWidthOverrides: { 4: 6.6, 9: 6.6 },
     title: "A6",
     laboratoryName: "F8",
     dateTime: "B12",
@@ -176,10 +170,7 @@ const templateMappings = {
     printArea: "A1:J36",
     printableLastRow: 36,
     printableLastColumn: 10,
-    pdfColumnWidthOverrides: {
-      4: 6.6,
-      9: 6.6,
-    },
+    pdfColumnWidthOverrides: { 4: 6.6, 9: 6.6 },
     title: "A6",
     laboratoryName: "F8",
     dateTime: "B12",
@@ -206,10 +197,7 @@ const templateMappings = {
     printArea: "A1:J36",
     printableLastRow: 36,
     printableLastColumn: 10,
-    pdfColumnWidthOverrides: {
-      5: 6.6,
-      10: 6.6,
-    },
+    pdfColumnWidthOverrides: { 5: 6.6, 10: 6.6 },
     title: "A6",
     laboratoryName: "G8",
     dateTime: "B12",
@@ -236,11 +224,7 @@ const templateMappings = {
     printArea: "A1:J36",
     printableLastRow: 36,
     printableLastColumn: 10,
-    pdfColumnWidthOverrides: {
-      4: 6.6,
-      9: 6.6,
-      10: 6.9,
-    },
+    pdfColumnWidthOverrides: { 4: 6.6, 9: 6.6, 10: 6.9 },
     title: "A6",
     laboratoryName: "F8",
     dateTime: "B12",
@@ -262,6 +246,16 @@ const templateMappings = {
     signedRole: "G36",
   },
 };
+
+const commonLibreOfficeCandidates = [
+  "soffice.com",
+  "soffice",
+  "libreoffice",
+  "C:/Program Files/LibreOffice/program/soffice.com",
+  "C:/Program Files/LibreOffice/program/soffice.exe",
+  "C:/Program Files (x86)/LibreOffice/program/soffice.com",
+  "C:/Program Files (x86)/LibreOffice/program/soffice.exe",
+];
 
 const setCellValue = (sheet, address, value) => {
   if (!address) return;
@@ -296,6 +290,10 @@ const ensureTemplateAvailable = () => {
       500,
     );
   }
+};
+
+const ensureGeneratedFilesRoot = async () => {
+  await fsp.mkdir(env.generatedFilesRoot, { recursive: true });
 };
 
 const applyCommonFields = (sheet, mapping, certificate, settings) => {
@@ -366,8 +364,7 @@ const applyPdfPrintSetup = (sheet, mapping) => {
   const lastColumn = mapping.printableLastColumn;
 
   if (lastRow && sheet.rowCount > lastRow) {
-    const trailingRows = sheet.rowCount - lastRow;
-    sheet.spliceRows(lastRow + 1, trailingRows);
+    sheet.spliceRows(lastRow + 1, sheet.rowCount - lastRow);
   }
 
   if (lastColumn && sheet.columnCount > lastColumn) {
@@ -381,24 +378,12 @@ const applyPdfPrintSetup = (sheet, mapping) => {
   }
 };
 
-const commonLibreOfficeCandidates = [
-  "soffice.com",
-  "soffice",
-  "libreoffice",
-  "C:/Program Files/LibreOffice/program/soffice.com",
-  "C:/Program Files/LibreOffice/program/soffice.exe",
-  "C:/Program Files (x86)/LibreOffice/program/soffice.com",
-  "C:/Program Files (x86)/LibreOffice/program/soffice.exe",
-];
-
 const resolveLibreOfficeBinary = async () => {
-  const candidates = [
-    env.libreOfficePath,
-    ...commonLibreOfficeCandidates,
-  ].filter(Boolean);
+  const candidates = [env.libreOfficePath, ...commonLibreOfficeCandidates].filter(Boolean);
 
   for (const candidate of candidates) {
     const isNamedCommand = !candidate.includes("/") && !candidate.includes("\\");
+
     if (isNamedCommand) {
       try {
         await execFileAsync(candidate, ["--version"], { timeout: 10000 });
@@ -420,18 +405,28 @@ const resolveLibreOfficeBinary = async () => {
   );
 };
 
-const convertWorkbookToPdfBuffer = async (workbook, certificate) => {
-  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "certiflow-pdf-"));
-  const xlsxPath = path.join(tempRoot, `${buildFileBaseName(certificate)}.xlsx`);
-  const pdfPath = path.join(tempRoot, `${buildFileBaseName(certificate)}.pdf`);
-  const libreOfficeProfileDir = path.join(tempRoot, "lo-profile");
+const buildArtifactBundlePaths = (certificate) => {
+  const safeType = String(certificate.certificateType?.code || "CERT").replace(/[^\w-]+/g, "_");
+  const certificateId = String(certificate._id || "preview");
+  const baseName = buildFileBaseName(certificate);
+  const directory = path.resolve(env.generatedFilesRoot, "certificates", safeType, certificateId);
+
+  return {
+    directory,
+    excelAbsolutePath: path.join(directory, `${baseName}.xlsx`),
+    pdfAbsolutePath: path.join(directory, `${baseName}.pdf`),
+  };
+};
+
+const convertExcelFileToPdf = async ({ xlsxPath, pdfPath, workspaceRoot }) => {
+  const libreOfficeBinary = await resolveLibreOfficeBinary();
+  const libreOfficeProfileDir = path.join(workspaceRoot, "lo-profile");
+  const libreOfficeProfileUrl = `file:///${libreOfficeProfileDir.replace(/\\/g, "/")}`;
+
+  await fsp.mkdir(libreOfficeProfileDir, { recursive: true });
+  await fsp.rm(pdfPath, { force: true });
 
   try {
-    await workbook.xlsx.writeFile(xlsxPath);
-    await fsp.mkdir(libreOfficeProfileDir, { recursive: true });
-    const libreOfficeBinary = await resolveLibreOfficeBinary();
-    const libreOfficeProfileUrl = `file:///${libreOfficeProfileDir.replace(/\\/g, "/")}`;
-
     await execFileAsync(
       libreOfficeBinary,
       [
@@ -444,7 +439,7 @@ const convertWorkbookToPdfBuffer = async (workbook, certificate) => {
         "--convert-to",
         "pdf:calc_pdf_Export",
         "--outdir",
-        tempRoot,
+        path.dirname(pdfPath),
         xlsxPath,
       ],
       {
@@ -452,37 +447,37 @@ const convertWorkbookToPdfBuffer = async (workbook, certificate) => {
         windowsHide: true,
       },
     );
-
-    if (!fs.existsSync(pdfPath)) {
-      throw new AppError(
-        "LibreOffice no genero el PDF esperado. Revisa la plantilla, el area de impresion y la instalacion de LibreOffice.",
-        500,
-      );
-    }
-
-    return await fsp.readFile(pdfPath);
   } catch (error) {
-    if (error instanceof AppError) {
-      throw error;
-    }
-
     const stderr = error.stderr?.toString().trim();
     const stdout = error.stdout?.toString().trim();
     throw new AppError(
       `No se pudo convertir el Excel a PDF con LibreOffice.${stderr ? ` STDERR: ${stderr}` : ""}${stdout ? ` STDOUT: ${stdout}` : ""}`,
       500,
     );
-  } finally {
-    await fsp.rm(tempRoot, { recursive: true, force: true });
   }
+
+  if (!fs.existsSync(pdfPath)) {
+    throw new AppError(
+      "LibreOffice no genero el PDF esperado. Revisa la plantilla, el area de impresion y la instalacion de LibreOffice.",
+      500,
+    );
+  }
+};
+
+const hasStoredFile = (relativePath) => {
+  if (!relativePath) return false;
+  return fs.existsSync(resolveStoredFilePath(relativePath));
 };
 
 export const buildExcelFileName = (certificate) => `${buildFileBaseName(certificate)}.xlsx`;
 export const buildPdfFileName = (certificate) => `${buildFileBaseName(certificate)}.pdf`;
 
+export const getStoredArtifactAbsolutePath = resolveStoredFilePath;
+
 export const buildCertificateWorkbook = async (certificate, settings) => {
   ensureTemplateAvailable();
   const targetSheetName = getSheetNameForCertificate(certificate);
+
   if (!targetSheetName) {
     throw new AppError(
       `No hay una hoja de plantilla configurada para el tipo ${certificate.certificateType?.code || "-"}.`,
@@ -496,23 +491,93 @@ export const buildCertificateWorkbook = async (certificate, settings) => {
 
   const sheet = workbook.getWorksheet(targetSheetName);
   const mapping = templateMappings[targetSheetName];
+
   if (!sheet || !mapping) {
     throw new AppError(`No se pudo cargar la hoja de plantilla ${targetSheetName}.`, 500);
   }
 
   applyCommonFields(sheet, mapping, certificate, settings);
+
   if (targetSheetName === "Certi Glicol") {
     applyGlycolFields(sheet, mapping, certificate);
   } else {
     applyHydrocarbonFields(sheet, mapping, certificate);
   }
-  applyPdfPrintSetup(sheet, mapping);
 
+  applyPdfPrintSetup(sheet, mapping);
   pruneWorkbookToTargetSheet(workbook, targetSheetName);
+
   return workbook;
 };
 
 export const buildCertificatePdfBuffer = async (certificate, settings) => {
   const workbook = await buildCertificateWorkbook(certificate, settings);
-  return convertWorkbookToPdfBuffer(workbook, certificate);
+  const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "certiflow-preview-"));
+  const xlsxPath = path.join(tempRoot, `${buildFileBaseName(certificate)}.xlsx`);
+  const pdfPath = path.join(tempRoot, `${buildFileBaseName(certificate)}.pdf`);
+
+  try {
+    await workbook.xlsx.writeFile(xlsxPath);
+    await convertExcelFileToPdf({ xlsxPath, pdfPath, workspaceRoot: tempRoot });
+    return await fsp.readFile(pdfPath);
+  } finally {
+    await fsp.rm(tempRoot, { recursive: true, force: true });
+  }
 };
+
+export const persistCertificateArtifacts = async (certificate, settings) => {
+  await ensureGeneratedFilesRoot();
+
+  const workbook = await buildCertificateWorkbook(certificate, settings);
+  const { directory, excelAbsolutePath, pdfAbsolutePath } = buildArtifactBundlePaths(certificate);
+
+  await fsp.rm(directory, { recursive: true, force: true });
+  await fsp.mkdir(directory, { recursive: true });
+
+  await workbook.xlsx.writeFile(excelAbsolutePath);
+  await convertExcelFileToPdf({
+    xlsxPath: excelAbsolutePath,
+    pdfPath: pdfAbsolutePath,
+    workspaceRoot: directory,
+  });
+
+  const generatedAt = new Date();
+
+  certificate.excelPath = getRelativeStoragePath(excelAbsolutePath);
+  certificate.pdfPath = getRelativeStoragePath(pdfAbsolutePath);
+  certificate.generatedAt = generatedAt;
+  certificate.exportStatus = {
+    excelReady: true,
+    pdfReady: true,
+  };
+
+  await certificate.save();
+
+  return {
+    excelPath: certificate.excelPath,
+    pdfPath: certificate.pdfPath,
+    generatedAt,
+  };
+};
+
+export const ensureCertificateArtifacts = async (certificate, settings) => {
+  const excelExists = hasStoredFile(certificate.excelPath);
+  const pdfExists = hasStoredFile(certificate.pdfPath);
+
+  if (excelExists && pdfExists) {
+    return {
+      excelPath: certificate.excelPath,
+      pdfPath: certificate.pdfPath,
+      generatedAt: certificate.generatedAt,
+      regenerated: false,
+    };
+  }
+
+  const generated = await persistCertificateArtifacts(certificate, settings);
+
+  return {
+    ...generated,
+    regenerated: true,
+  };
+};
+
