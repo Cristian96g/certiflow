@@ -1,0 +1,33 @@
+# Node
+**/node_modules
+
+# Builds
+**/dist
+**/build
+
+# Variables de entorno
+**/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# VSCode
+.vscode/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+temp/
+tmp/
+
+# Exportaciones
+exports/
+generated/
+
+# SQLite (si algún día migrás)
+*.db
+*.sqlite
+*.sqlite3
