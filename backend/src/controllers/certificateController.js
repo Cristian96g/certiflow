@@ -16,6 +16,26 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 
 const calculateApi = (density) => Number((141.5 / density - 131.5).toFixed(2));
 
+const getArgentinaNow = () => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
+
+  return {
+    date: `${getPart("year")}-${getPart("month")}-${getPart("day")}`,
+    time: `${getPart("hour")}:${getPart("minute")}`,
+  };
+};
+
 const streamFileResponse = (res, absolutePath, contentType, fileName) =>
   new Promise((resolve, reject) => {
     const stream = fs.createReadStream(absolutePath);
@@ -132,6 +152,7 @@ const parseNullableNumber = (value) => {
 };
 
 const buildCertificatePayload = (body, defaults) => {
+  const argentinaNow = getArgentinaNow();
   const density = Number(body.density);
 
   if (!density || density <= 0) {
@@ -151,8 +172,8 @@ const buildCertificatePayload = (body, defaults) => {
     certificateNumber: String(body.certificateNumber || "").trim(),
     certificateType: body.certificateType,
     site: body.site,
-    date: String(body.date || "").trim(),
-    time: String(body.time || "").trim(),
+    date: String(body.date || argentinaNow.date).trim(),
+    time: String(body.time || argentinaNow.time).trim(),
     samplePoint: String(body.samplePoint || "").trim(),
     destination: String(body.destination || "").trim(),
     mercuryPpb: parseNullableNumber(body.mercuryPpb),

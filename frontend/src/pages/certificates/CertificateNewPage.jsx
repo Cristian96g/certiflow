@@ -16,11 +16,31 @@ const noMercuryTypeCodes = new Set(["CN", "CMO", "GLI"]);
 const noTvrTypeCodes = new Set(["CCV", "EIO", "OCE", "CMO", "GLI"]);
 const noObservationsTypeCodes = new Set(["CBR", "CCV", "GLI"]);
 
+const getArgentinaNow = () => {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(new Date());
+  const getPart = (type) => parts.find((part) => part.type === type)?.value || "";
+
+  return {
+    date: `${getPart("year")}-${getPart("month")}-${getPart("day")}`,
+    time: `${getPart("hour")}:${getPart("minute")}`,
+  };
+};
+
 const initialForm = {
   certificateNumber: "",
   certificateType: "",
-  date: "",
-  time: "",
+  date: getArgentinaNow().date,
+  time: getArgentinaNow().time,
   site: "",
   samplePoint: "",
   destination: "Control",
@@ -63,8 +83,11 @@ export default function CertificateNewPage() {
     getConfigBundleRequest()
       .then((data) => {
         setConfig(data);
+        const argentinaNow = getArgentinaNow();
         setForm((current) => ({
           ...current,
+          date: current.date || argentinaNow.date,
+          time: current.time || argentinaNow.time,
           signedBy: data.settings?.defaultSignerName || "",
         }));
       })
@@ -147,7 +170,8 @@ export default function CertificateNewPage() {
         <h2 className="mt-2 text-2xl font-semibold">Nuevo certificado</h2>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
           Este formulario guarda el certificado en base de datos, calcula el API automaticamente y deja ocultos los
-          campos que salen de configuracion para hacerlo mas corto.
+          campos que salen de configuracion para hacerlo mas corto. Fecha y hora se completan automaticamente en
+          horario de Argentina.
         </p>
       </div>
 
