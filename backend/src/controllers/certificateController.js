@@ -16,6 +16,11 @@ import { AppError } from "../utils/AppError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 const calculateApi = (density) => Number((141.5 / density - 131.5).toFixed(2));
+const nowMs = () => Date.now();
+const logPdfTiming = (label, durationMs, extra = "") => {
+  const suffix = extra ? ` ${extra}` : "";
+  console.log(`[PDF] ${label}: ${durationMs}ms${suffix}`);
+};
 
 const getArgentinaNow = () => {
   const formatter = new Intl.DateTimeFormat("en-CA", {
@@ -446,14 +451,43 @@ export const exportCertificateExcel = asyncHandler(async (req, res) => {
 });
 
 export const exportCertificatePdf = asyncHandler(async (req, res) => {
+  const endpointStartedAt = nowMs();
+  console.log(`[PDF] Endpoint start: ${new Date(endpointStartedAt).toISOString()} id=${req.params.id}`);
+
+  const mongoStartedAt = nowMs();
   const [certificate, settings] = await Promise.all([
     getCertificateDocument(req.params.id),
     Setting.findOne(),
   ]);
-  await ensureCertificateArtifacts(certificate, settings);
+  logPdfTiming("Mongo lookup", nowMs() - mongoStartedAt);
+
+  const artifactCheckStartedAt = nowMs();
+  await ensureCertificateArtifacts(certificate, settings, {
+    onPdfPathChecked: ({ durationMs, pdfPath }) => {
+      logPdfTiming("pdfPath check", durationMs, `path=${pdfPath || "-"}`);
+    },
+    onFileExistsChecked: ({ durationMs, excelExists, pdfExists }) => {
+      logPdfTiming("File exists", durationMs, `excel=${excelExists} pdf=${pdfExists}`);
+    },
+    onRegenerationStart: () => {
+      console.log("[PDF] Regeneration start");
+    },
+    onLibreOfficeStart: () => {
+      console.log("[PDF] LibreOffice start");
+    },
+    onLibreOfficeEnd: (durationMs) => {
+      logPdfTiming("LibreOffice conversion", durationMs);
+    },
+  });
+  logPdfTiming("Artifact ensure total", nowMs() - artifactCheckStartedAt);
+
   const fileName = buildPdfFileName(certificate);
   const absolutePath = getStoredArtifactAbsolutePath(certificate.pdfPath);
+  const streamStartedAt = nowMs();
+  console.log("[PDF] Stream start");
   await streamFileResponse(res, absolutePath, "application/pdf", fileName);
+  logPdfTiming("Stream response", nowMs() - streamStartedAt);
+  logPdfTiming("Total endpoint", nowMs() - endpointStartedAt);
 });
 
 export const previewCertificatePdfByType = asyncHandler(async (req, res) => {

@@ -11,6 +11,7 @@ import { AppError } from "../utils/AppError.js";
 
 const execFileAsync = promisify(execFile);
 const CERT_NO = `Certificado N\u00B0`;
+const nowMs = () => Date.now();
 
 const sanitizeFileNamePart = (value, fallback = "sin-dato") => {
   const normalized = String(value || "")
@@ -443,15 +444,18 @@ const buildArtifactBundlePaths = (certificate) => {
   };
 };
 
-const convertExcelFileToPdf = async ({ xlsxPath, pdfPath, workspaceRoot }) => {
+const convertExcelFileToPdf = async ({ xlsxPath, pdfPath, workspaceRoot, hooks = {} }) => {
   const libreOfficeBinary = await resolveLibreOfficeBinary();
   const libreOfficeProfileDir = path.join(workspaceRoot, "lo-profile");
   const libreOfficeProfileUrl = `file:///${libreOfficeProfileDir.replace(/\\/g, "/")}`;
 
   await fsp.mkdir(libreOfficeProfileDir, { recursive: true });
   await fsp.rm(pdfPath, { force: true });
+  let libreOfficeStartedAt = 0;
 
   try {
+    libreOfficeStartedAt = nowMs();
+    hooks.onLibreOfficeStart?.();
     await execFileAsync(
       libreOfficeBinary,
       [
@@ -472,7 +476,11 @@ const convertExcelFileToPdf = async ({ xlsxPath, pdfPath, workspaceRoot }) => {
         windowsHide: true,
       },
     );
+    hooks.onLibreOfficeEnd?.(nowMs() - libreOfficeStartedAt);
   } catch (error) {
+    if (libreOfficeStartedAt) {
+      hooks.onLibreOfficeEnd?.(nowMs() - libreOfficeStartedAt);
+    }
     const stderr = error.stderr?.toString().trim();
     const stdout = error.stdout?.toString().trim();
     throw new AppError(
@@ -550,7 +558,7 @@ export const buildCertificatePdfBuffer = async (certificate, settings) => {
   }
 };
 
-export const persistCertificateArtifacts = async (certificate, settings) => {
+export const persistCertificateArtifacts = async (certificate, settings, options = {}) => {
   await ensureGeneratedFilesRoot();
 
   const workbook = await buildCertificateWorkbook(certificate, settings);
@@ -560,10 +568,15 @@ export const persistCertificateArtifacts = async (certificate, settings) => {
   await fsp.mkdir(directory, { recursive: true });
 
   await workbook.xlsx.writeFile(excelAbsolutePath);
+  options.onRegenerationStart?.();
   await convertExcelFileToPdf({
     xlsxPath: excelAbsolutePath,
     pdfPath: pdfAbsolutePath,
     workspaceRoot: directory,
+    hooks: {
+      onLibreOfficeStart: options.onLibreOfficeStart,
+      onLibreOfficeEnd: options.onLibreOfficeEnd,
+    },
   });
 
   const generatedAt = new Date();
@@ -585,9 +598,22 @@ export const persistCertificateArtifacts = async (certificate, settings) => {
   };
 };
 
-export const ensureCertificateArtifacts = async (certificate, settings) => {
+export const ensureCertificateArtifacts = async (certificate, settings, options = {}) => {
+  const pdfPathCheckStartedAt = nowMs();
+  const currentPdfPath = certificate.pdfPath;
+  options.onPdfPathChecked?.({
+    durationMs: nowMs() - pdfPathCheckStartedAt,
+    pdfPath: currentPdfPath,
+  });
+
+  const fileExistsStartedAt = nowMs();
   const excelExists = hasStoredFile(certificate.excelPath);
   const pdfExists = hasStoredFile(certificate.pdfPath);
+  options.onFileExistsChecked?.({
+    durationMs: nowMs() - fileExistsStartedAt,
+    excelExists,
+    pdfExists,
+  });
 
   if (excelExists && pdfExists) {
     return {
@@ -598,7 +624,7 @@ export const ensureCertificateArtifacts = async (certificate, settings) => {
     };
   }
 
-  const generated = await persistCertificateArtifacts(certificate, settings);
+  const generated = await persistCertificateArtifacts(certificate, settings, options);
 
   return {
     ...generated,
