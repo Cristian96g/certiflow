@@ -27,6 +27,7 @@ export default function CertificateDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [downloading, setDownloading] = useState("");
 
   const loadCertificate = () =>
     getCertificateRequest(id)
@@ -39,6 +40,7 @@ export default function CertificateDetailPage() {
 
   const handleExcelDownload = async () => {
     try {
+      setDownloading("excel");
       setError("");
       setMessage("");
       await downloadCertificateExcel(certificate._id, certificate.certificateNumber);
@@ -46,11 +48,14 @@ export default function CertificateDetailPage() {
       setMessage(`Excel descargado para el certificado ${certificate.certificateNumber}.`);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setDownloading("");
     }
   };
 
   const handlePdfDownload = async () => {
     try {
+      setDownloading("pdf");
       setError("");
       setMessage("");
       await downloadCertificatePdf(certificate._id, certificate.certificateNumber);
@@ -58,6 +63,8 @@ export default function CertificateDetailPage() {
       setMessage(`PDF descargado para el certificado ${certificate.certificateNumber}.`);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setDownloading("");
     }
   };
 
@@ -87,10 +94,12 @@ export default function CertificateDetailPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <Button variant="secondary" onClick={handlePdfDownload}>
-            PDF
+          <Button variant="secondary" onClick={handlePdfDownload} loading={downloading === "pdf"} disabled={Boolean(downloading)}>
+            {downloading === "pdf" ? "Generando PDF..." : "PDF"}
           </Button>
-          <Button onClick={handleExcelDownload}>Excel</Button>
+          <Button onClick={handleExcelDownload} loading={downloading === "excel"} disabled={Boolean(downloading)}>
+            {downloading === "excel" ? "Generando Excel..." : "Excel"}
+          </Button>
         </div>
       </div>
 

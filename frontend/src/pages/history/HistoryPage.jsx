@@ -24,6 +24,7 @@ export default function HistoryPage() {
   const [certificates, setCertificates] = useState([]);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [downloadingKey, setDownloadingKey] = useState("");
 
   const loadCertificates = async (currentFilters = filters) => {
     try {
@@ -54,23 +55,29 @@ export default function HistoryPage() {
 
   const handleExcelDownload = async (certificate) => {
     try {
+      setDownloadingKey(`${certificate._id}-excel`);
       setError("");
       setMessage("");
       await downloadCertificateExcel(certificate._id, certificate.certificateNumber);
       setMessage(`Excel descargado para el certificado ${certificate.certificateNumber}.`);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setDownloadingKey("");
     }
   };
 
   const handlePdfDownload = async (certificate) => {
     try {
+      setDownloadingKey(`${certificate._id}-pdf`);
       setError("");
       setMessage("");
       await downloadCertificatePdf(certificate._id, certificate.certificateNumber);
       setMessage(`PDF descargado para el certificado ${certificate.certificateNumber}.`);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setDownloadingKey("");
     }
   };
 
@@ -165,15 +172,19 @@ export default function HistoryPage() {
                         variant="secondary"
                         className="px-3 py-2 text-xs"
                         onClick={() => handlePdfDownload(certificate)}
+                        loading={downloadingKey === `${certificate._id}-pdf`}
+                        disabled={Boolean(downloadingKey)}
                       >
-                        PDF
+                        {downloadingKey === `${certificate._id}-pdf` ? "Generando..." : "PDF"}
                       </Button>
                       <Button
                         variant="secondary"
                         className="px-3 py-2 text-xs"
                         onClick={() => handleExcelDownload(certificate)}
+                        loading={downloadingKey === `${certificate._id}-excel`}
+                        disabled={Boolean(downloadingKey)}
                       >
-                        Excel
+                        {downloadingKey === `${certificate._id}-excel` ? "Generando..." : "Excel"}
                       </Button>
                     </div>
                   </td>

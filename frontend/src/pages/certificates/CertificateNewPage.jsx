@@ -57,6 +57,7 @@ export default function CertificateNewPage() {
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [downloadMode, setDownloadMode] = useState("");
 
   useEffect(() => {
     getConfigBundleRequest()
@@ -110,6 +111,7 @@ export default function CertificateNewPage() {
 
   const handleSubmit = async (mode) => {
     setSaving(true);
+    setDownloadMode(mode);
     setError("");
     setFeedback("");
 
@@ -134,6 +136,7 @@ export default function CertificateNewPage() {
       setError(err.message);
     } finally {
       setSaving(false);
+      setDownloadMode("");
     }
   };
 
@@ -314,14 +317,26 @@ export default function CertificateNewPage() {
           </div>
 
           <div className="space-y-3">
-            <Button className="w-full" onClick={() => handleSubmit("save")} disabled={saving}>
-              {saving ? "Guardando..." : "Guardar"}
+            <Button className="w-full" onClick={() => handleSubmit("save")} disabled={saving} loading={saving && downloadMode === "save"}>
+              {saving && downloadMode === "save" ? "Guardando..." : "Guardar"}
             </Button>
-            <Button variant="secondary" className="w-full" onClick={() => handleSubmit("pdf")} disabled={saving}>
-              Guardar y descargar PDF
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => handleSubmit("pdf")}
+              disabled={saving}
+              loading={saving && downloadMode === "pdf"}
+            >
+              {saving && downloadMode === "pdf" ? "Generando PDF..." : "Guardar y descargar PDF"}
             </Button>
-            <Button variant="ghost" className="w-full" onClick={() => handleSubmit("excel")} disabled={saving}>
-              Guardar y descargar Excel
+            <Button
+              variant="ghost"
+              className="w-full"
+              onClick={() => handleSubmit("excel")}
+              disabled={saving}
+              loading={saving && downloadMode === "excel"}
+            >
+              {saving && downloadMode === "excel" ? "Generando Excel..." : "Guardar y descargar Excel"}
             </Button>
           </div>
         </aside>
