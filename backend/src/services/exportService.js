@@ -5,17 +5,39 @@ import path from "path";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import ExcelJS from "exceljs";
+import { getCertificateTypeConfig } from "../config/certificateTypeConfig.js";
 import { env } from "../config/env.js";
 import { AppError } from "../utils/AppError.js";
 
 const execFileAsync = promisify(execFile);
 const CERT_NO = `Certificado N\u00B0`;
 
-const buildFileBaseName = (certificate) => {
-  const number = String(certificate.certificateNumber || "sin-numero").replace(/[^\w-]+/g, "_");
-  const typeCode = certificate.certificateType?.code || "CERT";
-  return `${typeCode}_${number}`;
+const sanitizeFileNamePart = (value, fallback = "sin-dato") => {
+  const normalized = String(value || "")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return normalized || fallback;
 };
+
+const buildDisplayBaseName = (certificate) => {
+  const typeConfig = getCertificateTypeConfig(certificate.certificateType?.code);
+  const typeLabel =
+    sanitizeFileNamePart(typeConfig?.label, "") ||
+    sanitizeFileNamePart(certificate.templateSheet, "") ||
+    sanitizeFileNamePart(certificate.certificateType?.name, "") ||
+    `Certi ${sanitizeFileNamePart(certificate.certificateType?.code, "CERT")}`;
+  const certificateNumber = sanitizeFileNamePart(certificate.certificateNumber, "sin-numero");
+  const siteName =
+    sanitizeFileNamePart(certificate.site?.name, "") ||
+    sanitizeFileNamePart(typeConfig?.siteName, "") ||
+    "Sin yacimiento";
+
+  return `${typeLabel} - ${certificateNumber} - ${siteName}`;
+};
+
+const buildStorageBaseName = (certificate) => buildDisplayBaseName(certificate);
 
 const pad = (value) => String(value).padStart(2, "0");
 
@@ -281,7 +303,10 @@ const pruneWorkbookToTargetSheet = (workbook, targetSheetName) => {
   }
 };
 
-const getSheetNameForCertificate = (certificate) => templateSheetMap[certificate.certificateType?.code];
+const getSheetNameForCertificate = (certificate) =>
+  certificate.templateSheet ||
+  getCertificateTypeConfig(certificate.certificateType?.code)?.templateSheet ||
+  templateSheetMap[certificate.certificateType?.code];
 
 const ensureTemplateAvailable = () => {
   if (!fs.existsSync(env.certificateTemplatePath)) {
@@ -408,7 +433,7 @@ const resolveLibreOfficeBinary = async () => {
 const buildArtifactBundlePaths = (certificate) => {
   const safeType = String(certificate.certificateType?.code || "CERT").replace(/[^\w-]+/g, "_");
   const certificateId = String(certificate._id || "preview");
-  const baseName = buildFileBaseName(certificate);
+  const baseName = buildStorageBaseName(certificate);
   const directory = path.resolve(env.generatedFilesRoot, "certificates", safeType, certificateId);
 
   return {
@@ -469,8 +494,8 @@ const hasStoredFile = (relativePath) => {
   return fs.existsSync(resolveStoredFilePath(relativePath));
 };
 
-export const buildExcelFileName = (certificate) => `${buildFileBaseName(certificate)}.xlsx`;
-export const buildPdfFileName = (certificate) => `${buildFileBaseName(certificate)}.pdf`;
+export const buildExcelFileName = (certificate) => `${buildDisplayBaseName(certificate)}.xlsx`;
+export const buildPdfFileName = (certificate) => `${buildDisplayBaseName(certificate)}.pdf`;
 
 export const getStoredArtifactAbsolutePath = resolveStoredFilePath;
 
@@ -513,8 +538,8 @@ export const buildCertificateWorkbook = async (certificate, settings) => {
 export const buildCertificatePdfBuffer = async (certificate, settings) => {
   const workbook = await buildCertificateWorkbook(certificate, settings);
   const tempRoot = await fsp.mkdtemp(path.join(os.tmpdir(), "certiflow-preview-"));
-  const xlsxPath = path.join(tempRoot, `${buildFileBaseName(certificate)}.xlsx`);
-  const pdfPath = path.join(tempRoot, `${buildFileBaseName(certificate)}.pdf`);
+  const xlsxPath = path.join(tempRoot, `${buildStorageBaseName(certificate)}.xlsx`);
+  const pdfPath = path.join(tempRoot, `${buildStorageBaseName(certificate)}.pdf`);
 
   try {
     await workbook.xlsx.writeFile(xlsxPath);
@@ -580,4 +605,3 @@ export const ensureCertificateArtifacts = async (certificate, settings) => {
     regenerated: true,
   };
 };
-

@@ -1,3 +1,4 @@
+import { CERTIFICATE_TYPE_CONFIG } from "../config/certificateTypeConfig.js";
 import { CertificateType } from "../models/CertificateType.js";
 import { FieldLabel } from "../models/FieldLabel.js";
 import { Setting } from "../models/Setting.js";
@@ -18,6 +19,7 @@ export const getConfigBundle = asyncHandler(async (_req, res) => {
     sites,
     fieldLabels,
     settings,
+    certificateTypeConfig: CERTIFICATE_TYPE_CONFIG,
   });
 });
 

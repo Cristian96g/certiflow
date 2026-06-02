@@ -72,6 +72,7 @@ export default function CertificateNewPage() {
     certificateTypes: [],
     sites: [],
     settings: null,
+    certificateTypeConfig: {},
   });
   const [form, setForm] = useState(initialForm);
   const [feedback, setFeedback] = useState("");
@@ -118,6 +119,8 @@ export default function CertificateNewPage() {
     );
   }, [config.certificateTypes, form.certificateType]);
 
+  const selectedTypeConfig = config.certificateTypeConfig?.[selectedTypeCode] || null;
+
   const isGlycol = glycolTypeCodes.has(selectedTypeCode);
   const showMercury = selectedTypeCode && !noMercuryTypeCodes.has(selectedTypeCode);
   const showTvr = selectedTypeCode && !noTvrTypeCodes.has(selectedTypeCode);
@@ -132,6 +135,28 @@ export default function CertificateNewPage() {
     }));
   };
 
+  useEffect(() => {
+    if (!selectedTypeCode || !selectedTypeConfig) {
+      return;
+    }
+
+    const matchedSite = config.sites.find((site) => site.code === selectedTypeConfig.siteCode);
+    if (!matchedSite) {
+      return;
+    }
+
+    setForm((current) => {
+      if (current.site === matchedSite._id) {
+        return current;
+      }
+
+      return {
+        ...current,
+        site: matchedSite._id,
+      };
+    });
+  }, [config.sites, selectedTypeCode, selectedTypeConfig]);
+
   const handleSubmit = async (mode) => {
     setSaving(true);
     setDownloadMode(mode);
@@ -141,6 +166,8 @@ export default function CertificateNewPage() {
     try {
       const payload = {
         ...form,
+        certificateTypeCode: selectedTypeCode,
+        templateSheet: selectedTypeConfig?.templateSheet || "",
         emulsionPct: form.emulsionPct || suggestedEmulsion,
       };
       const data = await createCertificateRequest(payload);
@@ -208,6 +235,12 @@ export default function CertificateNewPage() {
             options={config.sites}
             required
           />
+          {selectedTypeConfig ? (
+            <p className="-mt-2 text-xs text-slate-500 md:col-span-2">
+              Autocompletado segun plantilla: <span className="font-medium text-slate-700">{selectedTypeConfig.siteName}</span>.
+              Si hace falta, podes corregirlo manualmente.
+            </p>
+          ) : null}
           <InputField
             label="Tanque / Punto de muestreo"
             name="samplePoint"

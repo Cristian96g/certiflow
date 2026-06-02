@@ -97,6 +97,11 @@ const certificateSchema = new mongoose.Schema(
       default: "",
       trim: true,
     },
+    templateSheet: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     exportStatus: {
       pdfReady: {
         type: Boolean,

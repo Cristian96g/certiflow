@@ -1,4 +1,5 @@
 import fs from "fs";
+import { getCertificateTypeConfig } from "../config/certificateTypeConfig.js";
 import { Certificate } from "../models/Certificate.js";
 import { CertificateType } from "../models/CertificateType.js";
 import { Setting } from "../models/Setting.js";
@@ -151,8 +152,24 @@ const parseNullableNumber = (value) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const buildCertificatePayload = (body, defaults) => {
+const resolveSiteId = async (body) => {
+  if (body.site) {
+    return body.site;
+  }
+
+  const typeConfig = getCertificateTypeConfig(body.certificateTypeCode || body.certificateType);
+  if (!typeConfig?.siteCode) {
+    return "";
+  }
+
+  const site = await Site.findOne({ code: typeConfig.siteCode });
+  return site?._id?.toString() || "";
+};
+
+const buildCertificatePayload = async (body, defaults) => {
   const argentinaNow = getArgentinaNow();
+  const siteId = await resolveSiteId(body);
+  const typeConfig = getCertificateTypeConfig(body.certificateTypeCode || body.certificateType);
   const density = Number(body.density);
 
   if (!density || density <= 0) {
@@ -171,7 +188,7 @@ const buildCertificatePayload = (body, defaults) => {
   return {
     certificateNumber: String(body.certificateNumber || "").trim(),
     certificateType: body.certificateType,
-    site: body.site,
+    site: siteId,
     date: String(body.date || argentinaNow.date).trim(),
     time: String(body.time || argentinaNow.time).trim(),
     samplePoint: String(body.samplePoint || "").trim(),
@@ -189,12 +206,13 @@ const buildCertificatePayload = (body, defaults) => {
     observations: String(body.observations || "").trim(),
     signedBy: String(body.signedBy || defaults.defaultSignerName || "").trim(),
     signedRole: defaults.defaultSignerRole || "",
+    templateSheet: String(body.templateSheet || typeConfig?.templateSheet || "").trim(),
   };
 };
 
 export const createCertificate = asyncHandler(async (req, res) => {
   const defaults = (await Setting.findOne()) || {};
-  const payload = buildCertificatePayload(req.body, defaults);
+  const payload = await buildCertificatePayload(req.body, defaults);
 
   const requiredFields = [
     "certificateNumber",
@@ -253,7 +271,7 @@ export const updateCertificate = asyncHandler(async (req, res) => {
     throw new AppError("Certificado no encontrado.", 404);
   }
 
-  const payload = buildCertificatePayload(req.body, defaults || {});
+  const payload = await buildCertificatePayload(req.body, defaults || {});
   const requiredFields = [
     "certificateNumber",
     "certificateType",
