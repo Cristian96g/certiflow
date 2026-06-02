@@ -239,6 +239,7 @@ export const createCertificate = asyncHandler(async (req, res) => {
     ...payload,
     createdBy: req.user._id,
   });
+  console.log(`[ARTIFACTS] Certificate created certificateId=${certificate._id}`);
 
   let artifactWarning = "";
 
@@ -247,15 +248,23 @@ export const createCertificate = asyncHandler(async (req, res) => {
     .populate("site", "name code");
 
   try {
+    console.log(`[ARTIFACTS] Calling persistCertificateArtifacts certificateId=${certificate._id}`);
     await persistCertificateArtifacts(artifactCertificate, defaults);
   } catch (error) {
     artifactWarning = error.message || "No se pudieron generar los archivos exportables automaticamente.";
+    console.error(
+      `[ARTIFACTS] Persist failed certificateId=${certificate._id} message=${artifactWarning}`,
+      error,
+    );
   }
 
   const populated = await Certificate.findById(certificate._id)
     .populate("certificateType", "name code")
     .populate("site", "name code")
     .populate("createdBy", "name email");
+  console.log(
+    `[ARTIFACTS] Post-create Mongo state certificateId=${certificate._id} excelPath=${populated?.excelPath || "-"} pdfPath=${populated?.pdfPath || "-"} generatedAt=${populated?.generatedAt || "-"}`,
+  );
 
   res.status(201).json({
     certificate: populated,

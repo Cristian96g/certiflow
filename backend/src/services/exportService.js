@@ -559,6 +559,7 @@ export const buildCertificatePdfBuffer = async (certificate, settings) => {
 };
 
 export const persistCertificateArtifacts = async (certificate, settings, options = {}) => {
+  console.log(`[ARTIFACTS] Start persist certificateId=${certificate._id}`);
   await ensureGeneratedFilesRoot();
 
   const workbook = await buildCertificateWorkbook(certificate, settings);
@@ -568,6 +569,7 @@ export const persistCertificateArtifacts = async (certificate, settings, options
   await fsp.mkdir(directory, { recursive: true });
 
   await workbook.xlsx.writeFile(excelAbsolutePath);
+  console.log(`[ARTIFACTS] Generated Excel path=${excelAbsolutePath}`);
   options.onRegenerationStart?.();
   await convertExcelFileToPdf({
     xlsxPath: excelAbsolutePath,
@@ -578,6 +580,7 @@ export const persistCertificateArtifacts = async (certificate, settings, options
       onLibreOfficeEnd: options.onLibreOfficeEnd,
     },
   });
+  console.log(`[ARTIFACTS] Generated PDF path=${pdfAbsolutePath}`);
 
   const generatedAt = new Date();
 
@@ -589,7 +592,12 @@ export const persistCertificateArtifacts = async (certificate, settings, options
     pdfReady: true,
   };
 
+  console.log(
+    `[ARTIFACTS] Saving paths to Mongo certificateId=${certificate._id} excelPath=${certificate.excelPath} pdfPath=${certificate.pdfPath}`,
+  );
   await certificate.save();
+  console.log(`[ARTIFACTS] Saved pdfPath=${certificate.pdfPath}`);
+  console.log(`[ARTIFACTS] Saved excelPath=${certificate.excelPath}`);
 
   return {
     excelPath: certificate.excelPath,
